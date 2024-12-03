@@ -24,4 +24,7 @@ func main() {
 		fmt.Fprintf(os.Stderr, "Error reading file: %v\n", err)
 		os.Exit(1)
 	}
+
+	invalid_tokens, valid_tokens := lex(string(fileContents))
+	print(invalid_tokens, valid_tokens)
 }
