@@ -13,11 +13,6 @@ func main() {
 
 	command := os.Args[1]
 
-	if command != "tokenize" {
-		fmt.Fprintf(os.Stderr, "Unknown command: %s\n", command)
-		os.Exit(1)
-	}
-
 	filename := os.Args[2]
 	fileContents, err := os.ReadFile(filename)
 	if err != nil {
@@ -25,6 +20,12 @@ func main() {
 		os.Exit(1)
 	}
 
-	invalid_tokens, valid_tokens := lex(string(fileContents))
-	print(invalid_tokens, valid_tokens)
+	if command == "tokenize" {
+		lexer := NewLexer(string(fileContents))
+		valid_tokens, invalid_tokens := lexer.Tokenize()
+		print_lex(invalid_tokens, valid_tokens)
+	}
+
+	fmt.Fprintf(os.Stderr, "Unknown command: %s\n", command)
+	os.Exit(1)
 }

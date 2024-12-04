@@ -2,153 +2,250 @@ package main
 
 import (
 	"fmt"
-	"strings"
-	"unicode"
 )
 
-func lex(content string) ([]string, []string) {
-	valid_tokens := []string{}
-	invalid_tokens := []string{}
-	current_line := 1	
+type Token struct {
+	Type    string
+	Lexeme  string
+	Literal interface{}
+	Line    int
+}
 
-	for i := 0; i < len(content); i++ {
-		ch := content[i]
+const (
+	LEFT_PAREN    = "LEFT_PAREN"
+	RIGHT_PAREN   = "RIGHT_PAREN"
+	LEFT_BRACE    = "LEFT_BRACE"
+	RIGHT_BRACE   = "RIGHT_BRACE"
+	COMMA         = "COMMA"
+	DOT           = "DOT"
+	MINUS         = "MINUS"
+	PLUS          = "PLUS"
+	SEMICOLON     = "SEMICOLON"
+	STAR          = "STAR"
+	SLASH         = "SLASH"
+	EQUAL         = "EQUAL"
+	EQUAL_EQUAL   = "EQUAL_EQUAL"
+	BANG          = "BANG"
+	BANG_EQUAL    = "BANG_EQUAL"
+	LESS          = "LESS"
+	LESS_EQUAL    = "LESS_EQUAL"
+	GREATER       = "GREATER"
+	GREATER_EQUAL = "GREATER_EQUAL"
+	STRING        = "STRING"
+	NUMBER        = "NUMBER"
+	IDENTIFIER    = "IDENTIFIER"
+	EOF           = "EOF"
+)
 
-		switch ch {
-			case '(':
-				valid_tokens = append(valid_tokens, "LEFT_PAREN ( null")
-			case ')':
-				valid_tokens = append(valid_tokens, "RIGHT_PAREN ) null")
-			case '{':
-				valid_tokens = append(valid_tokens, "LEFT_BRACE { null")
-			case '}':
-				valid_tokens = append(valid_tokens, "RIGHT_BRACE } null")
-			case ',':
-				valid_tokens = append(valid_tokens, "COMMA , null")
-			case '.':
-				valid_tokens = append(valid_tokens, "DOT . null")
-			case '-':
-				valid_tokens = append(valid_tokens, "MINUS - null")
-			case '+':
-				valid_tokens = append(valid_tokens, "PLUS + null")
-			case ';':
-				valid_tokens = append(valid_tokens, "SEMICOLON ; null")
-			case '*':
-				valid_tokens = append(valid_tokens, "STAR * null")
-			case '/':
-				if i + 1 < len(content) && content[i + 1] == '/' {
-					for i < len(content) && content[i] != '\n' {
-						i++
-					}
-					i-- 
-				} else {
-					valid_tokens = append(valid_tokens, "SLASH / null")
-				}
-			case '=':
-				if i + 1 < len(content) && content[i + 1] == '=' {
-					valid_tokens = append(valid_tokens, "EQUAL_EQUAL == null")
-					i += 1
-				} else {
-					valid_tokens = append(valid_tokens, "EQUAL = null")
-				}
-			case '!':
-				if i + 1 < len(content) && content[i + 1] == '=' {
-					valid_tokens = append(valid_tokens, "BANG_EQUAL != null")
-					i += 1
-				} else {
-					valid_tokens = append(valid_tokens, "BANG ! null")
-				}
-			case '<':
-				if i + 1 < len(content) && content[i + 1] == '=' {
-					valid_tokens = append(valid_tokens, "LESS_EQUAL <= null")
-					i += 1
-				} else {
-					valid_tokens = append(valid_tokens, "LESS < null")
-				}
-			case '>':
-				if i + 1 < len(content) && content[i + 1] == '=' {
-					valid_tokens = append(valid_tokens, "GREATER_EQUAL >= null")
-					i += 1
-				} else {
-					valid_tokens = append(valid_tokens, "GREATER > null")
-				}
-			case '\n':
-				current_line += 1
-			case '\t', ' ':
-				continue
-			case '"':
-				temp := ""
-				valid_string := false
-				i += 1
-				
-				for i < len(content) {
-					if content[i] == '"' {
-						valid_tokens = append(valid_tokens, fmt.Sprintf("STRING \"%s\" %s", temp, temp))
-						valid_string = true
-						break
-					}
-					if content[i] == '\n' {
-						current_line += 1
-					}
-					temp += string(content[i])
-					i += 1
-				}
-				
-				if !valid_string {
-					invalid_tokens = append(invalid_tokens, fmt.Sprintf("[line %d] Error: Unterminated string.", current_line))
-				}
-			case '0', '1', '2', '3', '4', '5', '6', '7', '8', '9':
-				temp := ""
-				dot := false
-				
-				for i < len(content) && (unicode.IsDigit(rune(content[i])) || content[i] == '.'){
-					if content[i] == '.' {
-						dot = true
-					}
-					temp += string(content[i])
-					i += 1
-				}
-				i -= 1
+var keywords = map[string]string{
+	"and":    "AND",
+	"class":  "CLASS",
+	"else":   "ELSE",
+	"false":  "FALSE",
+	"for":    "FOR",
+	"fun":    "FUN",
+	"if":     "IF",
+	"nil":    "NIL",
+	"or":     "OR",
+	"print":  "PRINT",
+	"return": "RETURN",
+	"super":  "SUPER",
+	"this":   "THIS",
+	"true":   "TRUE",
+	"var":    "VAR",
+	"while":  "WHILE",
+}
 
-				temp_parsed := temp
-				if dot {
-					parts := strings.Split(temp_parsed, ".")
-					if len(parts) == 2 {
-						allZeros := true
-						for _, c := range parts[1] {
-							if c != '0' {
-								allZeros = false
-								break
-							}
-						}
-						if allZeros {
-							temp_parsed = parts[0] + ".0"
-						}
-					}
-				} else {
-					temp_parsed = temp_parsed + ".0"
-				}
+type Lexer struct {
+	source  string
+	tokens  []Token
+	errors  []string
+	start   int
+	current int
+	line    int
+}
 
-				valid_tokens = append(valid_tokens, fmt.Sprintf("NUMBER %s %s", temp, temp_parsed))
-			case 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', '_':
-				temp := ""
-				for i < len(content) && (unicode.IsLetter(rune(content[i])) || unicode.IsDigit(rune(content[i])) || content[i] == '_') {
-					temp += string(content[i])
-					i += 1
-				}
-				i -= 1
+func NewLexer(source string) *Lexer {
+	return &Lexer{
+		source: source,
+		tokens: make([]Token, 0),
+		errors: make([]string, 0),
+		line:   1,
+	}
+}
 
-				if temp == "and" || temp == "class" || temp == "else" || temp == "false" || temp == "for" || temp == "fun" || temp == "if" || temp == "nil" || temp == "or" || temp == "print" || temp == "return" || temp == "super" || temp == "this" || temp == "true" || temp == "var" || temp == "while" {
-					valid_tokens = append(valid_tokens, fmt.Sprintf("%s %s null", strings.ToUpper(temp), temp))
-				} else {
-					valid_tokens = append(valid_tokens, fmt.Sprintf("IDENTIFIER %s null", temp))
-				}
+func (l *Lexer) isAtEnd() bool {
+	return l.current >= len(l.source)
+}
 
-			default:
-				invalid_tokens = append(invalid_tokens, fmt.Sprintf("[line %d] Error: Unexpected character: %c", current_line, ch))
+func (l *Lexer) advance() byte {
+	l.current++
+	return l.source[l.current-1]
+}
 
+func (l *Lexer) peek() byte {
+	if l.isAtEnd() {
+		return 0
+	}
+	return l.source[l.current]
+}
+
+func (l *Lexer) match(expected byte) bool {
+	if l.isAtEnd() || l.source[l.current] != expected {
+		return false
+	}
+	l.current++
+	return true
+}
+
+func (l *Lexer) addToken(tokenType string, literal interface{}) {
+	text := l.source[l.start:l.current]
+	l.tokens = append(l.tokens, Token{tokenType, text, literal, l.line})
+}
+
+func (l *Lexer) Tokenize() ([]Token, []string) {
+	for !l.isAtEnd() {
+		l.start = l.current
+		l.scanToken()
+	}
+	l.tokens = append(l.tokens, Token{EOF, "", nil, l.line})
+	return l.tokens, l.errors
+}
+
+func (l *Lexer) scanToken() {
+	c := l.advance()
+	switch c {
+	case '(':
+		l.addToken(LEFT_PAREN, nil)
+	case ')':
+		l.addToken(RIGHT_PAREN, nil)
+	case '{':
+		l.addToken(LEFT_BRACE, nil)
+	case '}':
+		l.addToken(RIGHT_BRACE, nil)
+	case ',':
+		l.addToken(COMMA, nil)
+	case '.':
+		l.addToken(DOT, nil)
+	case '-':
+		l.addToken(MINUS, nil)
+	case '+':
+		l.addToken(PLUS, nil)
+	case ';':
+		l.addToken(SEMICOLON, nil)
+	case '*':
+		l.addToken(STAR, nil)
+	case '/':
+		if l.match('/') {
+			for l.peek() != '\n' && !l.isAtEnd() {
+				l.advance()
+			}
+		} else {
+			l.addToken(SLASH, nil)
+		}
+	case '=':
+		if l.match('=') {
+			l.addToken(EQUAL_EQUAL, nil)
+		} else {
+			l.addToken(EQUAL, nil)
+		}
+	case '!':
+		if l.match('=') {
+			l.addToken(BANG_EQUAL, nil)
+		} else {
+			l.addToken(BANG, nil)
+		}
+	case '<':
+		if l.match('=') {
+			l.addToken(LESS_EQUAL, nil)
+		} else {
+			l.addToken(LESS, nil)
+		}
+	case '>':
+		if l.match('=') {
+			l.addToken(GREATER_EQUAL, nil)
+		} else {
+			l.addToken(GREATER, nil)
+		}
+	case '\n':
+		l.line++
+	case ' ', '\r', '\t':
+		break
+	case '"':
+		l.string()
+	default:
+		if isDigit(c) {
+			l.number()
+		} else if isAlpha(c) {
+			l.identifier()
+		} else {
+			l.errors = append(l.errors, fmt.Sprintf("[line %d] Error: Unexpected character: %c", l.line, c))
+		}
+	}
+}
+
+func (l *Lexer) string() {
+	for l.peek() != '"' && !l.isAtEnd() {
+		if l.peek() == '\n' {
+			l.line++
+		}
+		l.advance()
+	}
+
+	if l.isAtEnd() {
+		l.errors = append(l.errors, fmt.Sprintf("[line %d] Error: Unterminated string.", l.line))
+		return
+	}
+
+	l.advance()
+	value := l.source[l.start+1 : l.current-1]
+	l.addToken(STRING, value)
+}
+
+func (l *Lexer) number() {
+	for isDigit(l.peek()) {
+		l.advance()
+	}
+
+	if l.peek() == '.' && isDigit(l.peekNext()) {
+		l.advance()
+		for isDigit(l.peek()) {
+			l.advance()
 		}
 	}
 
-	return invalid_tokens, valid_tokens
+	value := l.source[l.start:l.current]
+	l.addToken(NUMBER, value)
+}
+
+func (l *Lexer) identifier() {
+	for isAlphaNumeric(l.peek()) {
+		l.advance()
+	}
+
+	text := l.source[l.start:l.current]
+	tokenType, ok := keywords[text]
+	if !ok {
+		tokenType = IDENTIFIER
+	}
+	l.addToken(tokenType, nil)
+}
+
+func (l *Lexer) peekNext() byte {
+	if l.current+1 >= len(l.source) {
+		return 0
+	}
+	return l.source[l.current+1]
+}
+
+func isDigit(c byte) bool {
+	return c >= '0' && c <= '9'
+}
+
+func isAlpha(c byte) bool {
+	return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_'
+}
+
+func isAlphaNumeric(c byte) bool {
+	return isAlpha(c) || isDigit(c)
 }
