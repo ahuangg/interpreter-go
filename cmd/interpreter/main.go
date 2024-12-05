@@ -22,8 +22,24 @@ func main() {
 
 	if command == "tokenize" {
 		lexer := NewLexer(string(fileContents))
+		lexer.Tokenize()
+		lexer.Print()
+	}
+
+	if command == "parse" {
+		lexer := NewLexer(string(fileContents))
 		valid_tokens, invalid_tokens := lexer.Tokenize()
-		print_lex(invalid_tokens, valid_tokens)
+		
+		if len(invalid_tokens) > 0 {
+			os.Exit(65)
+		}
+
+		parser := NewParser(valid_tokens)
+		parser.Parse()
+		parser.Print()
+
+
+		os.Exit(0)
 	}
 
 	fmt.Fprintf(os.Stderr, "Unknown command: %s\n", command)

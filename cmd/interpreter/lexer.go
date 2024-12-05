@@ -2,7 +2,14 @@ package main
 
 import (
 	"fmt"
+	"os"
+	"strings"
 )
+
+type TokenError struct {
+	Line    int
+	Message string
+}
 
 type Token struct {
 	Type    string
@@ -17,7 +24,7 @@ const (
 	LEFT_BRACE    = "LEFT_BRACE"
 	RIGHT_BRACE   = "RIGHT_BRACE"
 	COMMA         = "COMMA"
-	DOT           = "DOT"
+	DOT          = "DOT"
 	MINUS         = "MINUS"
 	PLUS          = "PLUS"
 	SEMICOLON     = "SEMICOLON"
@@ -59,7 +66,7 @@ var keywords = map[string]string{
 type Lexer struct {
 	source  string
 	tokens  []Token
-	errors  []string
+	errors  []TokenError
 	start   int
 	current int
 	line    int
@@ -69,7 +76,7 @@ func NewLexer(source string) *Lexer {
 	return &Lexer{
 		source: source,
 		tokens: make([]Token, 0),
-		errors: make([]string, 0),
+		errors: make([]TokenError, 0),
 		line:   1,
 	}
 }
@@ -103,7 +110,7 @@ func (l *Lexer) addToken(tokenType string, literal interface{}) {
 	l.tokens = append(l.tokens, Token{tokenType, text, literal, l.line})
 }
 
-func (l *Lexer) Tokenize() ([]Token, []string) {
+func (l *Lexer) Tokenize() ([]Token, []TokenError) {
 	for !l.isAtEnd() {
 		l.start = l.current
 		l.scanToken()
@@ -115,72 +122,72 @@ func (l *Lexer) Tokenize() ([]Token, []string) {
 func (l *Lexer) scanToken() {
 	c := l.advance()
 	switch c {
-	case '(':
-		l.addToken(LEFT_PAREN, nil)
-	case ')':
-		l.addToken(RIGHT_PAREN, nil)
-	case '{':
-		l.addToken(LEFT_BRACE, nil)
-	case '}':
-		l.addToken(RIGHT_BRACE, nil)
-	case ',':
-		l.addToken(COMMA, nil)
-	case '.':
-		l.addToken(DOT, nil)
-	case '-':
-		l.addToken(MINUS, nil)
-	case '+':
-		l.addToken(PLUS, nil)
-	case ';':
-		l.addToken(SEMICOLON, nil)
-	case '*':
-		l.addToken(STAR, nil)
-	case '/':
-		if l.match('/') {
-			for l.peek() != '\n' && !l.isAtEnd() {
-				l.advance()
+		case '(':
+			l.addToken(LEFT_PAREN, nil)
+		case ')':
+			l.addToken(RIGHT_PAREN, nil)
+		case '{':
+			l.addToken(LEFT_BRACE, nil)
+		case '}':
+			l.addToken(RIGHT_BRACE, nil)
+		case ',':
+			l.addToken(COMMA, nil)
+		case '.':
+			l.addToken(DOT, nil)
+		case '-':
+			l.addToken(MINUS, nil)
+		case '+':
+			l.addToken(PLUS, nil)
+		case ';':
+			l.addToken(SEMICOLON, nil)
+		case '*':
+			l.addToken(STAR, nil)
+		case '/':
+			if l.match('/') {
+				for l.peek() != '\n' && !l.isAtEnd() {
+					l.advance()
+				}
+			} else {
+				l.addToken(SLASH, nil)
 			}
-		} else {
-			l.addToken(SLASH, nil)
-		}
-	case '=':
-		if l.match('=') {
-			l.addToken(EQUAL_EQUAL, nil)
-		} else {
-			l.addToken(EQUAL, nil)
-		}
-	case '!':
-		if l.match('=') {
-			l.addToken(BANG_EQUAL, nil)
-		} else {
-			l.addToken(BANG, nil)
-		}
-	case '<':
-		if l.match('=') {
-			l.addToken(LESS_EQUAL, nil)
-		} else {
-			l.addToken(LESS, nil)
-		}
-	case '>':
-		if l.match('=') {
-			l.addToken(GREATER_EQUAL, nil)
-		} else {
-			l.addToken(GREATER, nil)
-		}
-	case '\n':
-		l.line++
-	case ' ', '\r', '\t':
-		break
-	case '"':
-		l.string()
-	default:
-		if isDigit(c) {
-			l.number()
-		} else if isAlpha(c) {
-			l.identifier()
-		} else {
-			l.errors = append(l.errors, fmt.Sprintf("[line %d] Error: Unexpected character: %c", l.line, c))
-		}
+		case '=':
+			if l.match('=') {
+				l.addToken(EQUAL_EQUAL, nil)
+			} else {
+				l.addToken(EQUAL, nil)
+			}
+		case '!':
+			if l.match('=') {
+				l.addToken(BANG_EQUAL, nil)
+			} else {
+				l.addToken(BANG, nil)
+			}
+		case '<':
+			if l.match('=') {
+				l.addToken(LESS_EQUAL, nil)
+			} else {
+				l.addToken(LESS, nil)
+			}
+		case '>':
+			if l.match('=') {
+				l.addToken(GREATER_EQUAL, nil)
+			} else {
+				l.addToken(GREATER, nil)
+			}
+		case '\n':
+			l.line++
+		case ' ', '\r', '\t':
+			break
+		case '"':
+			l.string()
+		default:
+			if isDigit(c) {
+				l.number()
+			} else if isAlpha(c) {
+				l.identifier()
+			} else {
+				l.errors = append(l.errors, TokenError{l.line, fmt.Sprintf("Unexpected character: %c", c)})
+			}
 	}
 }
 
@@ -193,7 +200,7 @@ func (l *Lexer) string() {
 	}
 
 	if l.isAtEnd() {
-		l.errors = append(l.errors, fmt.Sprintf("[line %d] Error: Unterminated string.", l.line))
+		l.errors = append(l.errors, TokenError{l.line, "Unterminated string."})
 		return
 	}
 
@@ -201,21 +208,47 @@ func (l *Lexer) string() {
 	value := l.source[l.start+1 : l.current-1]
 	l.addToken(STRING, value)
 }
-
 func (l *Lexer) number() {
 	for isDigit(l.peek()) {
 		l.advance()
 	}
 
-	if l.peek() == '.' && isDigit(l.peekNext()) {
+	hasDecimal := false
+	if l.peek() == '.' {
+		hasDecimal = true
 		l.advance()
-		for isDigit(l.peek()) {
-			l.advance()
+		if isDigit(l.peek()) {
+			for isDigit(l.peek()) {
+				l.advance()
+			}
+		} else {
+			l.current--
+			hasDecimal = false
 		}
 	}
 
 	value := l.source[l.start:l.current]
+	if value == "" {
+		value = "0"
+	}
+
+	if !hasDecimal {
+		value += ".0"
+	} else {
+		value = trimTrailingZeros(value)
+	}
+
 	l.addToken(NUMBER, value)
+}
+
+func trimTrailingZeros(value string) string {
+	if dotIndex := strings.Index(value, "."); dotIndex != -1 {
+		value = strings.TrimRight(value, "0")
+		if value[len(value)-1] == '.' {
+			value += "0"
+		}
+	}
+	return value
 }
 
 func (l *Lexer) identifier() {
@@ -231,13 +264,6 @@ func (l *Lexer) identifier() {
 	l.addToken(tokenType, nil)
 }
 
-func (l *Lexer) peekNext() byte {
-	if l.current+1 >= len(l.source) {
-		return 0
-	}
-	return l.source[l.current+1]
-}
-
 func isDigit(c byte) bool {
 	return c >= '0' && c <= '9'
 }
@@ -248,4 +274,24 @@ func isAlpha(c byte) bool {
 
 func isAlphaNumeric(c byte) bool {
 	return isAlpha(c) || isDigit(c)
+}
+
+func (l *Lexer) Print() {
+	for _, token := range l.errors {
+		fmt.Fprintf(os.Stderr, "[line %d] Error: %s\n", token.Line, token.Message)
+	}
+
+	for _, token := range l.tokens {
+		if token.Literal != nil {
+			fmt.Printf("%s %s %v\n", token.Type, token.Lexeme, token.Literal)
+		} else {
+			fmt.Printf("%s %s %s\n", token.Type, token.Lexeme, "null")
+		}
+	}
+
+	if len(l.errors) > 0 {
+		os.Exit(65)
+	} else {
+		os.Exit(0)
+	}
 }
